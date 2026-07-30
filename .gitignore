@@ -1,0 +1,7 @@
+# created by virtualenv automatically
+
+# Ignore the Data directory and all its contents
+/Data/
+
+# Ignore the Plots directory and all its contents
+/Plots/
