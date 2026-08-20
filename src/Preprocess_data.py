@@ -5,11 +5,12 @@ Purpose:  Cleans and featurizes raw yfinance CSV files for model consumption.
 Pipeline:
   1. Reads raw CSVs from ../Data/ (handles yfinance multi-level headers)
   2. Flattens column names to single-level (Open, High, Low, Close, Volume)
-  3. Engineers features: lags, returns, moving averages, volatility, etc.
+  3. Engineers features: technical indicators (RSI, MACD, EMA, ATR, Bollinger, OBV, ROC),
+     lags, returns, moving averages, volatility, etc.
   4. Drops NaN rows introduced by lag windows
   5. Removes return outliers (>4-sigma)
   6. Saves cleaned CSVs to ../Data/cleaned/{TICKER}_cleaned.csv
-Output:   Per-stock cleaned CSV files with ~29 columns and a _pipeline_summary.csv
+Output:   Per-stock cleaned CSV files and a _pipeline_summary.csv
           in ../Data/cleaned/ with a processing log.
 """
 
@@ -17,6 +18,7 @@ import os
 import glob
 import pandas as pd
 import numpy as np
+import ta
 
 DATA_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject\Data"
 CLEAN_DIR = os.path.join(DATA_DIR, "cleaned")
@@ -42,32 +44,71 @@ def read_yfinance_csv(filepath):
 
 
 def add_features(df):
-    """Engineer feature columns: lags, returns, log returns, moving averages, volatility, ranges."""
+    """Engineer feature columns: technical indicators, lags, returns, moving averages, volatility."""
 
     df = df.copy()
+
+    close = df["Close"]
+    high = df["High"]
+    low = df["Low"]
+    volume = df["Volume"]
+
+    # --- Trend Indicators ---
+    df["sma_10"] = ta.trend.sma_indicator(close, window=10)
+    df["sma_50"] = ta.trend.sma_indicator(close, window=50)
+    df["ema_12"] = ta.trend.ema_indicator(close, window=12)
+    df["ema_26"] = ta.trend.ema_indicator(close, window=26)
+
+    # --- Momentum Indicators ---
+    df["rsi_14"] = ta.momentum.rsi(close, window=14)
+
+    macd = ta.trend.MACD(close, window_slow=26, window_fast=12, window_sign=9)
+    df["macd"] = macd.macd()
+    df["macd_signal"] = macd.macd_signal()
+    df["macd_histogram"] = macd.macd_diff()
+
+    df["roc_10"] = ta.momentum.roc(close, window=10)
+
+    # --- Volatility Indicators ---
+    bb = ta.volatility.BollingerBands(close, window=20, window_dev=2)
+    df["bb_upper"] = bb.bollinger_hband()
+    df["bb_lower"] = bb.bollinger_lband()
+    df["bb_width"] = bb.bollinger_wband()
+
+    df["atr_14"] = ta.volatility.average_true_range(high, low, close, window=14)
+
+    # --- Volume Indicators ---
+    df["obv"] = ta.volume.on_balance_volume(close, volume)
+    df["volume_roc"] = ta.volume.volume_price_volume_index(close, volume) if False else volume.pct_change(periods=5)
+
+    # --- Price Lags ---
     for col in ["Close", "High", "Low", "Open"]:
         if col in df.columns:
             df[f"{col}_lag1"] = df[col].shift(1)
             df[f"{col}_lag7"] = df[col].shift(7)
             df[f"{col}_lag21"] = df[col].shift(21)
 
-    if "Close" in df.columns:
-        df["returns"] = df["Close"].pct_change()
-        df["log_returns"] = np.log(df["Close"] / df["Close"].shift(1))
-        df["returns_lag1"] = df["returns"].shift(1)
-        df["returns_lag7"] = df["returns"].shift(7)
+    # --- Returns ---
+    df["returns"] = close.pct_change()
+    df["log_returns"] = np.log(close / close.shift(1))
+    df["returns_lag1"] = df["returns"].shift(1)
+    df["returns_lag7"] = df["returns"].shift(7)
 
-        df["ma_5"] = df["Close"].rolling(window=5).mean()
-        df["ma_20"] = df["Close"].rolling(window=20).mean()
-        df["ma_50"] = df["Close"].rolling(window=50).mean()
+    # --- Simple Moving Averages (additional) ---
+    df["ma_5"] = close.rolling(window=5).mean()
+    df["ma_20"] = close.rolling(window=20).mean()
+    df["ma_50"] = close.rolling(window=50).mean()
 
-        df["volatility_5"] = df["returns"].rolling(window=5).std()
-        df["volatility_20"] = df["returns"].rolling(window=20).std()
+    # --- Volatility ---
+    df["volatility_5"] = df["returns"].rolling(window=5).std()
+    df["volatility_20"] = df["returns"].rolling(window=20).std()
 
-        df["high_low_range"] = df["High"] - df["Low"]
-        df["close_open_change"] = df["Close"] - df["Open"]
+    # --- Range Features ---
+    df["high_low_range"] = high - low
+    df["close_open_change"] = close - df["Open"]
 
-        df["volume_ma_5"] = df["Volume"].rolling(window=5).mean()
+    # --- Volume MA ---
+    df["volume_ma_5"] = volume.rolling(window=5).mean()
 
     return df
 

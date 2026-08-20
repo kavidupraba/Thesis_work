@@ -1,7 +1,7 @@
 """
-RandomForest_model.py
-=====================
-Purpose:  Train a Random Forest Classifier to predict the DIRECTION of
+XGBoost_model.py
+================
+Purpose:  Train an XGBoost Classifier to predict the DIRECTION of
           the next-day stock price movement (Up / Down) using engineered features.
 Output:   Console prints of train/test classification metrics, confusion matrix,
           and feature importance chart.
@@ -18,7 +18,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     matthews_corrcoef, roc_auc_score, confusion_matrix,
@@ -89,18 +89,25 @@ print()
 
 
 # ---------------------------------------------------------------------------
-# 4. TRAIN RANDOM FOREST CLASSIFIER
+# 4. TRAIN XGBOOST CLASSIFIER
 # ---------------------------------------------------------------------------
-model = RandomForestClassifier(
+scale_pos = n_down / n_up if n_up > 0 else 1
+
+model = XGBClassifier(
     n_estimators=200,
-    max_depth=10,
-    min_samples_leaf=5,
-    class_weight="balanced",
+    max_depth=6,
+    learning_rate=0.1,
+    min_child_weight=5,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    scale_pos_weight=scale_pos,
     random_state=RANDOM_STATE,
     n_jobs=-1,
+    eval_metric="logloss",
+    use_label_encoder=False,
 )
 
-print("Training Random Forest Classifier...")
+print("Training XGBoost Classifier...")
 model.fit(X_train, y_train)
 print("Training complete.\n")
 
@@ -151,10 +158,10 @@ for ax, y_true, y_pred, label in zip(
     cm = confusion_matrix(y_true, y_pred)
     disp = ConfusionMatrixDisplay(cm, display_labels=["DOWN", "UP"])
     disp.plot(ax=ax, colorbar=False, cmap="Blues")
-    ax.set_title(f"{label} Confusion Matrix ({TICKER} - RF)")
+    ax.set_title(f"{label} Confusion Matrix ({TICKER} - XGBoost)")
 
 plt.tight_layout()
-plt.savefig(os.path.join(PLOTS_DIR, f"{TICKER}_rf_confusion_matrix.png"), dpi=150)
+plt.savefig(os.path.join(PLOTS_DIR, f"{TICKER}_xgb_confusion_matrix.png"), dpi=150)
 plt.close()
 
 
@@ -176,10 +183,10 @@ top_indices = indices[:top_n]
 plt.figure(figsize=(10, 6))
 plt.barh(range(top_n), importances[top_indices][::-1], align="center")
 plt.yticks(range(top_n), [FEATURE_COLS[i] for i in top_indices][::-1])
-plt.xlabel("Feature Importance (MDI)")
-plt.title(f"{TICKER} — Random Forest Feature Importance (Top {top_n})")
+plt.xlabel("Feature Importance (Gain)")
+plt.title(f"{TICKER} — XGBoost Feature Importance (Top {top_n})")
 plt.tight_layout()
-plt.savefig(os.path.join(PLOTS_DIR, f"{TICKER}_rf_feature_importance.png"), dpi=150)
+plt.savefig(os.path.join(PLOTS_DIR, f"{TICKER}_xgb_feature_importance.png"), dpi=150)
 plt.close()
 
 

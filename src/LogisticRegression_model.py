@@ -36,6 +36,8 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
+    matthews_corrcoef,
+    roc_auc_score,
     confusion_matrix,
     ConfusionMatrixDisplay,
     classification_report,
@@ -172,16 +174,20 @@ def evaluate_classifier(y_true, y_pred, y_proba, label):
     prec = precision_score(y_true, y_pred, zero_division=0)
     rec = recall_score(y_true, y_pred, zero_division=0)
     f1 = f1_score(y_true, y_pred, zero_division=0)
+    mcc = matthews_corrcoef(y_true, y_pred)
+    auc = roc_auc_score(y_true, y_proba)
 
     print(f"  {label} Metrics:")
     print(f"    Accuracy:  {acc:.4f}")
     print(f"    Precision: {prec:.4f}  (of predicted UP, how many were correct)")
     print(f"    Recall:    {rec:.4f}  (of actual UP days, how many predicted)")
     print(f"    F1-score:  {f1:.4f}  (harmonic mean of precision & recall)")
+    print(f"    MCC:       {mcc:.4f}")
+    print(f"    ROC-AUC:   {auc:.4f}")
     print()
     print(f"  {label} Classification Report:")
     print(classification_report(y_true, y_pred, target_names=["DOWN", "UP"]))
-    return {"acc": acc, "prec": prec, "rec": rec, "f1": f1}
+    return {"acc": acc, "prec": prec, "rec": rec, "f1": f1, "mcc": mcc, "auc": auc}
 
 print("=" * 55)
 train_metrics = evaluate_classifier(y_train, y_train_pred, y_train_proba, "Train")
