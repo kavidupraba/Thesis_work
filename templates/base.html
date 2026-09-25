@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}SHAP Explanation Browser{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="wrap titlebar">
+    <span class="brand">SHAP Explanation Browser</span>
+    <span class="tag">10-stock pilot &middot; thesis demo</span>
+  </div>
+</header>
+<div class="wrap banner">
+  <strong>Important:</strong> every model evaluated in this project performs at
+  the chance level (about 50% accuracy) on out-of-sample data. This interface is
+  an <em>explanatory demo</em> of the pipeline and is not investment advice.
+</div>
+<main class="wrap">
+{% block body %}{% endblock %}
+</main>
+<footer class="wrap">Explainable stock-movement prediction &middot; midterm pipeline demo</footer>
+</body>
+</html>

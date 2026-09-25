@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ v.stock }} {{ v.model }} {{ v.date }} · Explanation{% endblock %}
+{% block body %}
+<p><a href="/">&larr; back</a></p>
+
+<div class="grid">
+  <section class="card">
+    <h2>{{ v.stock }} &middot; {{ v.date }} &middot; {{ v.model }}</h2>
+    <table class="keyvals">
+      <tr><th>Predicted move</th>
+          <td class="{{ 'up' if v.predicted == 'UP' else 'down' }}">{{ v.predicted }}</td></tr>
+      <tr><th>P(up)</th><td>{{ v.prob_up }}</td></tr>
+      <tr><th>Chance baseline</th><td>{{ v.base_rate }}</td></tr>
+      <tr><th>True move</th><td>{{ v.true }}</td></tr>
+      <tr><th>Call</th>
+          <td class="{{ 'ok' if v.correct else 'bad' }}">{{ 'Correct' if v.correct else 'Incorrect' }}</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <h3>Top SHAP contributions</h3>
+    <table class="feat">
+      <thead><tr><th>Feature</th><th>Category</th><th>Value</th><th>SHAP</th><th>Direction</th></tr></thead>
+      <tbody>
+      {% for t in v.top %}
+        <tr title="{{ t.desc }}">
+          <td><code>{{ t.name }}</code></td>
+          <td>{{ t.category }}</td>
+          <td>{{ t.value }}</td>
+          <td>{{ t.shap }}</td>
+          <td class="{{ 'up' if t.shap > 0 else 'down' }}">{{ t.direction }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card">
+  <h3>Waterfall attribution</h3>
+  <img src="/static/{{ img }}" alt="SHAP waterfall for {{ v.stock }} {{ v.model }} {{ v.date }}" class="waterfall">
+</section>
+
+<section class="card" id="llm-card">
+  <h3>Plain-language summary (Gemini)</h3>
+  {% if has_llm %}
+  <div id="llm-text" class="llm">{{ llm_text }}</div>
+  <button type="button" class="secondary" id="regen">Regenerate</button>
+  {% else %}
+  <p class="muted" id="llm-missing">No explanation cached for this case.</p>
+  <button type="button" id="gen">Generate LLM explanation</button>
+  <p class="muted small" id="llm-hint">Requires the server to be started with GEMINI_API_KEY set.</p>
+  {% endif %}
+</section>
+
+<script>
+function params() {
+  const u = new URLSearchParams(window.location.search);
+  return 'stock=' + encodeURIComponent(u.get('stock')) +
+         '&model=' + encodeURIComponent(u.get('model')) +
+         '&date=' + encodeURIComponent(u.get('date'));
+}
+async function generate(force) {
+  const btn = document.getElementById('gen') || document.getElementById('regen');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Working\u2026';
+  try {
+    const r = await fetch('/api/llm?' + params() + (force ? '&force=1' : ''));
+    const d = await r.json();
+    if (d.error) {
+      document.getElementById('llm-missing').textContent = d.error;
+    } else {
+      const box = document.getElementById('llm-text');
+      if (!box) {
+        const div = document.createElement('div');
+        div.className = 'llm'; div.id = 'llm-text';
+        document.querySelector('#llm-card h3').after(div);
+        document.getElementById('llm-missing')?.remove();
+      }
+      document.getElementById('llm-text').textContent = d.explanation;
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = old;
+  }
+}
+const genBtn = document.getElementById('gen');
+if (genBtn) genBtn.addEventListener('click', () => generate(false));
+const regenBtn = document.getElementById('regen');
+if (regenBtn) regenBtn.addEventListener('click', () => generate(true));
+</script>
+{% endblock %}

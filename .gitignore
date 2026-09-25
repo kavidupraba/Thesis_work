@@ -1,7 +1,39 @@
-# created by virtualenv automatically
+# docs/report artifacts (LaTeX + working copies)
+*.tex
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
 
-# Ignore the Data directory and all its contents
-/Data/
+# data files (raw + derived)
+*.csv
+*.npz
+*.parquet
+Data/
+Results/
+Plots/
+static/cache/*.png
 
-# Ignore the Plots directory and all its contents
-/Plots/
+# generated images/binaries
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# python hygiene
+__pycache__/
+*.pyc
+.venv/
+.env
+*.egg-info/
+
+# secrets
+.gemini_api_key
+*_api_key*

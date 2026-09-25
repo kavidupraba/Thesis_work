@@ -11,7 +11,7 @@ import yfinance as yf
 import os
 
 DATA_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject\Data"
-
+"""make each catagory company count the same take the top ten companiese in catogory and rerun the test check the sectors"""
 tickers = [
     # Technology
     "AAPL",   # Apple - stable tech

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}SHAP Explanation Browser &middot; Pick a prediction{% endblock %}
+{% block body %}
+<h1>Inspect a model prediction</h1>
+<p class="muted">
+  Choose a stock, a trading day in the out-of-sample test window, and a model,
+  then open the explanation. The page shows the call, the top SHAP
+  contributions, a waterfall plot, and (optionally) a plain-language summary.
+</p>
+
+<form method="get" action="/explain" class="picker" id="picker">
+  <label>Stock
+    <select name="stock" id="stock">
+      {% for s in stocks %}<option value="{{ s }}" {% if s == chosen_stock %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Model
+    <select name="model" id="model">
+      {% for m in models %}<option value="{{ m }}" {% if m == chosen_model %}selected{% endif %}>{{ m }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Date (out-of-sample test window)
+    <select name="date" id="date" size="10"></select>
+  </label>
+  <div class="picker-actions">
+    <button type="submit">Explain</button>
+    <button type="button" id="random" class="secondary">Surprise me</button>
+  </div>
+</form>
+
+<script>
+const stockEl = document.getElementById('stock');
+const modelEl = document.getElementById('model');
+const dateEl = document.getElementById('date');
+
+async function loadDates() {
+  const r = await fetch('/dates?stock=' + encodeURIComponent(stockEl.value) +
+                         '&model=' + encodeURIComponent(modelEl.value));
+  const data = await r.json();
+  dateEl.innerHTML = data.dates.map(d =>
+    '<option value="' + d + '">' + d + '</option>').join('');
+}
+
+function go(path) {
+  const url = path + '?stock=' + encodeURIComponent(stockEl.value) +
+              '&model=' + encodeURIComponent(modelEl.value) +
+              '&date=' + encodeURIComponent(dateEl.value);
+  window.location.href = url;
+}
+
+stockEl.addEventListener('change', loadDates);
+modelEl.addEventListener('change', loadDates);
+document.getElementById('picker').addEventListener('submit', e => { e.preventDefault(); go('/explain'); });
+document.getElementById('random').addEventListener('click', async () => {
+  const r = await fetch('/api/random');
+  const d = await r.json();
+  stockEl.value = d.stock; modelEl.value = d.model;
+  await loadDates();
+  dateEl.value = d.date;
+  go('/explain');
+});
+loadDates();
+</script>
+{% endblock %}
