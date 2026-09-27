@@ -4,7 +4,7 @@ Run:  .venv\\Scripts\\python.exe app.py   ->  http://127.0.0.1:5000
 
 Reads the precomputed cache in Results/ui_cache (see src/UI_precompute.py)
 and, for any chosen stock / day / model, shows the model's prediction, its
-probability, the top SHAP contributions, a waterfall plot, and a
+probability, the top SHAP contributions as a horizontal bar chart, and a
 natural-language explanation (cached for the 50 sampled cases, or generated
 live from Gemini when GEMINI_API_KEY is set).
 
@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
-import shap
+import matplotlib.pyplot as plt
 
 from flask import Flask, jsonify, request, send_file
 
@@ -199,7 +199,7 @@ async function loadCase(){{
   </div>
   <h3>Top-5 feature contributions</h3>
   <table><tr><th>Feature</th><th>Value</th><th>SHAP</th><th>Pushes</th></tr>${{f}}</table>
-  <h3>Waterfall</h3><img src="${{c.waterfall_url}}">
+  <h3>SHAP contributions</h3><img src="${{c.waterfall_url}}">
   <div id="llm" style="margin-top:12px">${{c.cached_llm_text?`<div class="facts" style="margin-bottom:8px"><div class="fact"><b>Generated via</b><span>${{c.has_cached_llm?'cached explanation':'--'}}</span></div></div>${{c.cached_llm_text}}`:`<span class="hint">No explanation generated for this day yet &mdash; click "Ask Gemini (this day)".</span>`}}</div>`;
 }}
 async function generateLLM(){{
@@ -242,15 +242,40 @@ def api_waterfall():
     if len(idx) == 0:
         return jsonify({"error": "date outside test window"}), 404
     i = int(idx[0])
-    expl = shap.Explanation(values=d["shap"][i], base_values=float(d["base"]),
-                            data=d["Xraw"][i],
-                            feature_names=[str(x) for x in d["feats"]])
-    fig = shap.plots.waterfall(expl, max_display=10, show=False)
+    feats = [str(x) for x in d["feats"]]
+    vals = d["shap"][i]
+
+    order = np.argsort(-np.abs(vals))[:10]
+    n = len(order)
+    labels = [feats[j] for j in order][::-1]
+    values = [float(vals[j]) for j in order][::-1]
+
+    pos_col = "#1e8e3e"
+    neg_col = "#b3261e"
+    colors = [pos_col if v >= 0 else neg_col for v in values]
+    m = max(abs(v) for v in values) or 1.0
+
+    fig, ax = plt.subplots(figsize=(8, max(3.0, 0.42 * n + 0.6)))
+    ax.barh(np.arange(n), values, color=colors, edgecolor="none", height=0.66)
+    ax.axvline(0, color="#5f6b76", linewidth=0.8)
+    pad = 0.02 * m
+    for v, k in zip(values, np.arange(n)):
+        ax.text(v + pad, k, f"{v:.4f}", va="center",
+                ha="left" if v >= 0 else "right",
+                fontsize=9, color="#1c2733")
+    ax.set_yticks(np.arange(n))
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xlim(-m * 1.22, m * 1.22)
+    ax.set_xlabel("SHAP contribution (push toward UP or DOWN)", fontsize=9)
+    ax.set_title(f"{stock} \u2014 {model} \u2014 {date}", fontsize=10)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(axis="x", labelsize=8)
+    fig.tight_layout()
+
     buf = io.BytesIO()
-    if hasattr(fig, "figure"):
-        fig.figure.savefig(buf, format="png", dpi=130, bbox_inches="tight")
-    else:
-        fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
     buf.seek(0)
     return send_file(buf, mimetype="image/png")
 
