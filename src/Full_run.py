@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore")
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef
+from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef, balanced_accuracy_score
 from scipy.stats import binomtest, chi2 as _chi2
 from xgboost import XGBClassifier
 
@@ -123,7 +123,10 @@ def main():
             auc = roc_auc_score(yv, probs[m])
             mcc = matthews_corrcoef(yv, probs[m] > 0.5)
             rows.append({"Stock": tk, "Model": m, "n": int(len(yv)),
-                         "Accuracy": round(float(acc), 4), "AUC": round(float(auc), 4),
+                         "Accuracy": round(float(acc), 4),
+                         "BalancedAccuracy": round(float(balanced_accuracy_score(yv, probs[m] > 0.5)), 4),
+                         "BaseRate": round(float(yv.mean()), 4),
+                         "AUC": round(float(auc), 4),
                          "MCC": round(float(mcc), 4)})
         pd.DataFrame(rows).to_csv(PARTIAL, index=False)
         completed_stocks.add(tk)
@@ -136,6 +139,8 @@ def main():
         p = np.concatenate(pooled[m]["p"])
         pool_rows.append({"Model": m, "n": int(len(y)),
                           "Accuracy": round(float(accuracy_score(y, p > 0.5)), 4),
+                          "BalancedAccuracy": round(float(balanced_accuracy_score(y, p > 0.5)), 4),
+                          "BaseRate": round(float(y.mean()), 4),
                           "AUC": round(float(roc_auc_score(y, p)), 4),
                           "MCC": round(float(matthews_corrcoef(y, p > 0.5)), 4)})
     pooled_ok = {m: pd.Series(np.concatenate(pooled[m]["y"])) == pd.Series(np.concatenate(pooled[m]["y"]))}
