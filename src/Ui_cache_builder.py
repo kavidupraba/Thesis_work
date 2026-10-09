@@ -1,4 +1,4 @@
-"""Ui_cache_builder.py
+﻿"""Ui_cache_builder.py
 Prepares a fast, pickle-free cache for the Flask explanation UI on the
 10-stock pilot. For each stock x model it retrains the model on the current
 (2018-2026) data with the chronological 80/20 split, and stores everything the
@@ -33,7 +33,7 @@ BASE_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject"
 CACHE_DIR = os.path.join(BASE_DIR, "Results", "ui_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-STOCKS = ["AAPL", "MSFT", "NVDA", "JPM", "JNJ", "WMT", "XOM", "GS", "TSLA", "V"]
+STOCKS = ["AAPL", "AMZN", "AVGO", "BA", "BAC", "CAT", "COP", "CRM", "CVX", "DIS", "GE", "GOOGL", "GS", "JNJ", "JPM", "KO", "MA", "META", "MSFT", "NVDA", "ORCL", "PFE", "PG", "TSLA", "UNH", "V", "WMT", "XOM"]
 MODELS = {"LogisticRegression": model_logreg, "RandomForest": model_rf, "XGBoost": model_xgb}
 TEST_SIZE = 0.2
 

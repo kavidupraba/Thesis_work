@@ -1,4 +1,4 @@
-"""UI_precompute.py
+﻿"""UI_precompute.py
 ==================
 Precomputes, on the current 2018-2026 cleaned data (chronological 80/20
 split), the per-model test-window arrays the Flask UI needs: dates, true
@@ -28,7 +28,7 @@ CACHE_DIR = os.path.join(BASE_DIR, "Results", "ui_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 MODELS = {"LogisticRegression": model_logreg, "RandomForest": model_rf, "XGBoost": model_xgb}
-STOCKS = ["AAPL", "MSFT", "NVDA", "JPM", "JNJ", "WMT", "XOM", "GS", "TSLA", "V"]
+STOCKS = ["AAPL", "AMZN", "AVGO", "BA", "BAC", "CAT", "COP", "CRM", "CVX", "DIS", "GE", "GOOGL", "GS", "JNJ", "JPM", "KO", "MA", "META", "MSFT", "NVDA", "ORCL", "PFE", "PG", "TSLA", "UNH", "V", "WMT", "XOM"]
 TEST_SIZE = 0.2
 
 
