@@ -1,0 +1,35 @@
+﻿Ideas to try (to improve test accuracy, without reintroducing leakage)
+
+Note: diagnostics show high bias (flat near base rate) + low variance. Genuine improvement likely needs new signal, not just tuning.
+
+1) Feature engineering (highest chance)
+- Market context: S&P500 return/vol, VIX, sector ETF returns, relative strength vs SPY, regime flags. SPX index download exists (Download_index_data.py) but not fully integrated.
+- Microstructure/alternative: realized volatility (EWMA), downside volatility, ADX, Donchian/Keltner, OBV slope/accel, CMF, MFI, TSI, Stoch %K/%D
+- Time/calendar: day-of-week, month, quarter, earnings proximity if available
+- Lag/structure: longer lags 21/63/126, rolling correlations vs SPY/sector, fractional differentiation
+- Cross-asset: bond yields, USD, commodities (if available)
+
+2) Target definition
+- Multi-day forward return (3/5d), sign of excess return vs SPY (alpha), filter |ret|>threshold to reduce noise
+- Class balance changes; evaluate on actionable subset
+
+3) Modeling (time-series nested CV for selection)
+- Class weights (LR/RF) and scale_pos_weight (XGB) under strict WF
+- LR L1/L2 C sweep, RF depth/leafs, XGB gamma/min_child_weight/reg_lambda
+- Ensembles: stacking on WF out-of-fold, probability averaging
+- Calibration (Platt/Isotonic) where thresholding matters
+
+4) Data/robustness
+- Liquidity filters, survivorship awareness, transaction costs/slippage in evaluation
+- Regime-aware (separate models per regime) or regime features
+
+5) Evaluation focus
+- Precision@k, Sharpe-like, MCC, Brier, calibration, profitability after costs (not just accuracy)
+
+Concrete low-risk tweaks to test under identical WF:
+- Add SPY/market-relative returns (integrate Enhance_features + index)
+- XGB: gamma 0-1, min_child_weight 1-5, colsample_bytree 0.6-0.8
+- RF: max_depth 6-9, min_samples_leaf 10-20
+- LR: L1 penalty (solver liblinear), C log sweep
+
+Bottom line: bias-variance suggests SNR is the bottleneck. Most plausible path is adding orthogonal features (market/macro/regime), not more tree depth/tuning alone.

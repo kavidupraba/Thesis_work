@@ -1,4 +1,4 @@
-# ML-Based Stock Price Direction Prediction with Explainable AI
+﻿# ML-Based Stock Price Direction Prediction with Explainable AI
 
 A master's-thesis project that builds a complete, leakage-free pipeline for
 next-day stock-movement prediction, explains the resulting models with SHAP,
@@ -116,3 +116,10 @@ Pooled McNemar p = 1.00 (no pairwise difference). Cross-sectional extension
 (69 features, 22,460 predictions): best daily mean Rank-IC 0.0065, i.e. within
 the band of pure chance and far below the ~0.02 threshold at which published
 factor libraries consider daily IC tradeable.
+
+
+## Diagnostics
+
+- src/Learning_curves.py — train/validation log-loss curves vs training size (per stock/model)
+- src/train_test_loss_all.py — generates train/test log-loss learning curves for all 28 stocks (3 models) and saves Results/train_test_loss/train_test_loss_all.csv and Plots/train_test_loss_all/tl_{TICKER}.png
+- src/Bias_variance.py, src/Bias_variance_full.py, src/Bias_variance_all_withplots.py — bias–variance decomposition vs model complexity; all-28 run produces Results/bias_variance/bias_variance_all.csv and per-stock plots in Plots/bias_variance_all/bv_{TICKER}.png. Results consistently show high bias (flat near the base rate) and low variance across capacities, indicating a low-signal (high-bias) regime rather than overfitting.

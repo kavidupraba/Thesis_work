@@ -1,0 +1,35 @@
+﻿List of things already done (repo + report)
+============================================
+
+Data
+- 28 stocks, 2018-2026, Yahoo Finance (auto_adjust=True), backfilled to 2018-01-01 (pre-COVID/COVID/post-COVID regimes)
+- Cleaning, outlier removal (4-sigma), NaN handling, per-stock cleaned CSVs
+
+Features
+- 23 technical indicators: RSI, MACD (line/hist), EMA(12/26), SMA(10/50), MA(5), ATR(14), Bollinger bands (lower/upper/mid), ROC, returns_lag1/3/7, volume_change, volatility_5/10, price_range
+- Cross-sectional extension (Section 3.5 in report): added {feat}__rank and {feat}__z per date -> 69 features total; evaluated with daily Rank-IC + within-day permutation control
+
+Targets & leakage control
+- Next-day direction (Close_t+1 > Close_t), horizon HORIZON=1
+- Leakage-free expanding-window walk-forward: step=20, min_train=0.6, per-fold StandardScaler (LR only), train rows end at i-HORIZON (explicit buffer), 3 seeds averaged on probabilities
+- Chronological 80/20 split used only in early pilot scripts; final headline numbers from WF
+- Discovered and fixed a 20-day horizon boundary leak (protocol corrected)
+
+Models & configs (as used in final WF)
+- Logistic Regression: C=1.0, max_iter=3000, random_state, n_jobs=-1 (no class_weight)
+- Random Forest: n_estimators=300, max_depth=12, min_samples_leaf=5, random_state, n_jobs=-1
+- XGBoost: n_estimators=300, max_depth=3, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, eval_metric='logloss', use_label_encoder=False, random_state, n_jobs=-1
+- No class weighting, no scale_pos_weight (matches codebase)
+
+Evaluation (headline)
+- Full 28-stock WF (22,520 pooled preds): LR 50.3% acc, 49.6% bal_acc, 53.2% base rate, AUC 0.498, MCC -0.008; RF 50.2%/50.1%/0.503/0.001; XGB 50.1%/50.0%/0.502/-0.000; pooled McNemar p=1.00
+- Cross-sectional (22,460 preds): LR 50.8%/50.5%/0.507/0.010; RF 49.9%/49.8%/0.499/-0.005; XGB 50.1%/50.0%/0.501/0.001; mean daily Rank-IC ~0.0008-0.0065, not sig vs within-day permutation
+- Horizons 1/3/5/20 tested; after leak fix 20-day also near chance
+- Significance (McNemar), SHAP global/local, cross-model/cross-stock/regime stability, actionability mapping (no edge), LLM explanations, Flask UI with horizontal SHAP bar chart
+
+Diagnostics (new)
+- Learning curves (train/test logloss across training sizes) for all 28 stocks + 3 models (Plots/train_test_loss_all/tl_{TK}.png, CSV)
+- Bias-variance vs complexity for all 28 stocks (Plots/bias_variance_all/bv_{TK}.png, CSV) — bias flat ~base rate, variance small; no bias drop with increasing capacity (high-bias/low-signal)
+
+Report state
+- final_thesis_report.tex compiled to 46 pages; updated to reflect cross-sectional + bar chart; references added (Vibe-Trading, Kakushadze 101, Qlib)
