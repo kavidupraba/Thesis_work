@@ -28,7 +28,12 @@ import matplotlib.pyplot as plt
 
 from flask import Flask, jsonify, request, send_file
 
-sys.path.insert(0, r"C:\Users\Admin\Documents\thesis_sending\PythonProject\src")
+for sc in [os.path.join(BASE_DIR, "src"), BASE_DIR]:
+    if os.path.exists(os.path.join(sc, "SHAP_analysis.py")):
+        sys.path.insert(0, sc)
+        break
+else:
+    sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 from SHAP_analysis import FEATURE_META
 
 BASE_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject"
