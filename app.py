@@ -75,15 +75,21 @@ def load_api_key():
     if k:
         return k
     kf = os.environ.get("GEMINI_KEY_FILE", "").strip()
-    if not kf:
-        kf = os.path.join(os.path.expanduser("~"), ".gemini_api_key")
-    try:
-        with open(kf, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except OSError:
-        return ""
-
-
+    candidates = []
+    if kf:
+        candidates.append(kf)
+    candidates.append(os.path.join(os.path.expanduser("~"), ".gemini_api_key"))
+    candidates.append("/etc/secrets/.gemini_api_key")
+    candidates.append("/etc/secrets/gemini_api_key")
+    for ck in candidates:
+        try:
+            with open(ck, "r", encoding="utf-8") as f:
+                v = f.read().strip()
+                if v:
+                    return v
+        except OSError:
+            pass
+    return "
 API_KEY = load_api_key()
 
 
