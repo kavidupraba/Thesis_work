@@ -89,7 +89,7 @@ def load_api_key():
                     return v
         except OSError:
             pass
-    return "
+    return ""
 API_KEY = load_api_key()
 
 
