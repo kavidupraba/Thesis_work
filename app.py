@@ -1,4 +1,4 @@
-import io
+﻿import io
 import os
 import json
 import sys
@@ -24,11 +24,11 @@ else:
     sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 from SHAP_analysis import FEATURE_META
 CACHE_DIR = os.path.join(BASE_DIR, "Results", "ui_cache")
-LLM_DIR = os.path.join(BASE_DIR, "Results", "shap")\nos.makedirs(LLM_DIR, exist_ok=True)\nLLM_CSV = os.path.join(LLM_DIR, "llm_explanations.csv")
-
-MODELS = ["LogisticRegression", "RandomForest", "XGBoost"]
-SYSTEM_PROMPT = (
-    "You write precise, plain-language explanations of machine-learning model "
+CACHE_DIR = os.path.join(BASE_DIR, "Results", "ui_cache")
+os.makedirs(CACHE_DIR, exist_ok=True)
+LLM_DIR = os.path.join(BASE_DIR, "Results", "shap")
+os.makedirs(LLM_DIR, exist_ok=True)
+LLM_CSV = os.path.join(LLM_DIR, "llm_explanations.csv")
     "decisions for a master's thesis on explainable stock-movement prediction. "
     "The model under discussion is known, from rigorous out-of-sample testing, "
     "to perform at the chance level (about 50% accuracy); your explanation must "
