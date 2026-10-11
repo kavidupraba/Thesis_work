@@ -24,7 +24,7 @@ else:
     sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 from SHAP_analysis import FEATURE_META
 CACHE_DIR = os.path.join(BASE_DIR, "Results", "ui_cache")
-LLM_CSV = os.path.join(BASE_DIR, "Results", "shap", "llm_explanations.csv")
+LLM_DIR = os.path.join(BASE_DIR, "Results", "shap")\nos.makedirs(LLM_DIR, exist_ok=True)\nLLM_CSV = os.path.join(LLM_DIR, "llm_explanations.csv")
 
 MODELS = ["LogisticRegression", "RandomForest", "XGBoost"]
 SYSTEM_PROMPT = (
