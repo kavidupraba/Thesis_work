@@ -1,21 +1,7 @@
-﻿"""app.py -- SHAP explanation browser (read-only demo UI).
-
-Run:  .venv\\Scripts\\python.exe app.py   ->  http://127.0.0.1:5000
-
-Reads the precomputed cache in Results/ui_cache (see src/UI_precompute.py)
-and, for any chosen stock / day / model, shows the model's prediction, its
-probability, the top SHAP contributions as a horizontal bar chart, and a
-natural-language explanation (cached for the 50 sampled cases, or generated
-live from Gemini when GEMINI_API_KEY is set).
-
-The models operate at the chance level; the UI is an explanatory demo only.
-"""
-
-import io
+﻿import io
 import os
 import json
 import sys
-import os
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -28,6 +14,8 @@ import matplotlib.pyplot as plt
 
 from flask import Flask, jsonify, request, send_file
 
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
 for sc in [os.path.join(BASE_DIR, "src"), BASE_DIR]:
     if os.path.exists(os.path.join(sc, "SHAP_analysis.py")):
         sys.path.insert(0, sc)
@@ -35,8 +23,6 @@ for sc in [os.path.join(BASE_DIR, "src"), BASE_DIR]:
 else:
     sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 from SHAP_analysis import FEATURE_META
-
-BASE_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject"
 CACHE_DIR = os.path.join(BASE_DIR, "Results", "ui_cache")
 LLM_CSV = os.path.join(BASE_DIR, "Results", "shap", "llm_explanations.csv")
 
