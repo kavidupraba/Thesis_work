@@ -8,20 +8,20 @@ It explains next-day stock predictions using SHAP and LLM (explanatory demo only
 Please try the app first, then complete this survey.
 
 Section 1: Demographics
-Q1. Role (Single choice)
+Q1. Role (Multiple choice - add 'Other...' option)
 - Retail trader
 - Finance student
 - ML/DS student
 - Academic/Supervisor
-- Other (short answer)
+- Other...
 
-Q2. Trading experience (Single choice)
+Q2. Trading experience (Multiple choice)
 - None
 - Less than 1 year
 - 1-3 years
 - More than 3 years
 
-Q3. ML/XAI familiarity (Single choice)
+Q3. ML/XAI familiarity (Multiple choice)
 - None
 - Basic
 - Intermediate
