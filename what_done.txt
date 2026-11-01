@@ -8,6 +8,7 @@ Data
 Features
 - 23 technical indicators: RSI, MACD (line/hist), EMA(12/26), SMA(10/50), MA(5), ATR(14), Bollinger bands (lower/upper/mid), ROC, returns_lag1/3/7, volume_change, volatility_5/10, price_range
 - Cross-sectional extension (Section 3.5 in report): added {feat}__rank and {feat}__z per date -> 69 features total; evaluated with daily Rank-IC + within-day permutation control
+- Market-context extension: downloaded ^GSPC + ^VIX from 2018-01-01, built 14 market-series features (1/5/20d returns, realised vol, trend, drawdown, VIX level/change/z-score/regime flags) + 5 stock-relative features (excess return 1/5/20d, 60d beta, 60d correlation) -> 42 features; written to Data/cleaned_mkt (technical columns byte-identical to Data/cleaned)
 
 Targets & leakage control
 - Next-day direction (Close_t+1 > Close_t), horizon HORIZON=1
@@ -25,6 +26,10 @@ Evaluation (headline)
 - Full 28-stock WF (22,520 pooled preds): LR 50.3% acc, 49.6% bal_acc, 53.2% base rate, AUC 0.498, MCC -0.008; RF 50.2%/50.1%/0.503/0.001; XGB 50.1%/50.0%/0.502/-0.000; pooled McNemar p=1.00
 - Cross-sectional (22,460 preds): LR 50.8%/50.5%/0.507/0.010; RF 49.9%/49.8%/0.499/-0.005; XGB 50.1%/50.0%/0.501/0.001; mean daily Rank-IC ~0.0008-0.0065, not sig vs within-day permutation
 - Horizons 1/3/5/20 tested; after leak fix 20-day also near chance
+- Market-context A/B (same WF protocol, 22,520 preds): technical+market LR 50.62%/50.20 bal/AUC 0.5029/MCC 0.0040, RF 50.32/50.14/0.5037/0.0028, XGB 50.51/50.43/0.5046/0.0087 -> deltas +0.34/+0.07/+0.44 pp, all bootstrap CIs cross zero, McNemar p>=0.18, 14-16/28 stocks improve: null
+- Market-only ablation (19 features): LR 51.25%, RF 51.13%, XGB 50.96% acc; +0.97/+0.89/+0.89 pp; 18-19/28 stocks improve; McNemar exact p=0.045/0.097/0.104 (chi2 0.022/0.048/0.052); bal_acc only ~50.4-50.5% -> borderline, not a usable edge
+- Lagged-market robustness (market block shifted +1 day, n=22,460): LR 50.41%, RF 50.30%, XGB 49.78%; XGB -0.75 pp vs market (CI -1.39 to -0.07, p=0.043) -> same-close market info, not persistent state, drives the small gain
+- Leakage audit for market features (src/Test_market_features.py, exit 0): truncated rebuilds, AST look-ahead scan, coverage, leaky shift(-1) control; fixed stale-VIX holiday row (2026-05-25) so holidays cannot create phantom rows or forward-filled returns
 - Significance (McNemar), SHAP global/local, cross-model/cross-stock/regime stability, actionability mapping (no edge), LLM explanations, Flask UI with horizontal SHAP bar chart
 
 Diagnostics (new)
@@ -33,3 +38,15 @@ Diagnostics (new)
 
 Report state
 - final_thesis_report.tex compiled to 46 pages; updated to reflect cross-sectional + bar chart; references added (Vibe-Trading, Kakushadze 101, Qlib)
+
+Market-context reproduction
+- python src/Download_index_data.py
+- python src/Test_market_features.py
+- python src/Preprocess_data.py --with-market --out-dir Data/cleaned_mkt
+- python src/Full_run.py --data-dir Data/cleaned --tag baseline
+- python src/Full_run.py --data-dir Data/cleaned_mkt --tag market
+- python src/Full_run.py --data-dir Data/cleaned_mkt --tag market_only --feature-set market
+- python src/Full_run.py --data-dir Data/cleaned_mkt --tag market_lag1 --market-lag 1
+- python src/Compare_runs.py --baseline baseline --market market
+- python src/Compare_runs.py --baseline baseline --market market_only
+- python src/Compare_runs.py --baseline market --market market_lag1

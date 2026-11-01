@@ -52,9 +52,12 @@ from sklearn.metrics import (accuracy_score, roc_auc_score, matthews_corrcoef,
 from xgboost import XGBClassifier
 
 BASE_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject"
-DATA_DIR = os.path.join(BASE_DIR, "Data", "cleaned")
-CS_DIR = os.path.join(BASE_DIR, "Data", "cross_sectional")
-RESULTS_DIR = os.path.join(BASE_DIR, "Results", "cross_sectional")
+# THESIS_DATA_DIR lets this experiment run on Data/cleaned_mkt without editing
+# the file; CS/RESULTS overrides keep market-run artifacts separate.
+DATA_DIR = os.environ.get("THESIS_DATA_DIR", os.path.join(BASE_DIR, "Data", "cleaned"))
+CS_DIR = os.environ.get("THESIS_CS_DIR", os.path.join(BASE_DIR, "Data", "cross_sectional"))
+RESULTS_DIR = os.environ.get("THESIS_CS_RESULTS_DIR",
+                             os.path.join(BASE_DIR, "Results", "cross_sectional"))
 PARTIAL = os.path.join(RESULTS_DIR, "cs_partial.csv")
 
 RS = 42
@@ -104,22 +107,32 @@ def build_cross_sectional_features():
     if missing:
         raise ValueError(f"Features not found: {missing}")
     idx = sorted(set().union(*[s.index for s in sheets.values()]))
+    added, skipped = 0, []
     for feat in BASE_FEATURES:
         panel = pd.DataFrame(index=idx, columns=STOCKS)
         for tk in STOCKS:
             panel.loc[sheets[tk].index, tk] = sheets[tk][feat]
-        rank = panel.rank(axis=1, pct=True, na_option="keep")
         mu = panel.mean(axis=1)
         s = panel.std(axis=1, ddof=1)
         s = s.replace({0: np.nan})
+        # Market-wide columns are identical across stocks, so ranking them would
+        # produce constant, uninformative features. Skip any such column instead
+        # of writing a degenerate rank/z block.
+        if s.notna().sum() == 0:
+            skipped.append(feat)
+            continue
+        rank = panel.rank(axis=1, pct=True, na_option="keep")
         z = panel.sub(mu, axis=0).div(s, axis=0)
         for tk in STOCKS:
             sheets[tk][f"{feat}__rank"] = rank[tk]
             sheets[tk][f"{feat}__z"] = z[tk]
+        added += 1
     for tk, s in sheets.items():
         s.to_csv(os.path.join(CS_DIR, f"{tk}_cs.csv"))
     print(f"Cross-sectional features written to {CS_DIR} "
-          f"({len(BASE_FEATURES)}x2 extra columns per stock).")
+          f"({added}x2 extra columns per stock).")
+    if skipped:
+        print(f"Skipped zero-cross-sectional-variance features: {skipped}")
 
 
 def load_daily_cs(tk):

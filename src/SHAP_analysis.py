@@ -53,7 +53,9 @@ from xgboost import XGBClassifier
 # ---------------------------------------------------------------------------
 BASE_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject"
 DATA_DIR = os.path.join(BASE_DIR, "Data")
-CLEAN_DIR = os.path.join(DATA_DIR, "cleaned")
+# Set THESIS_CLEAN_DIR to a directory such as Data/cleaned_mkt to explain the
+# market-augmented feature set without touching the technical-only baseline.
+CLEAN_DIR = os.environ.get("THESIS_CLEAN_DIR", os.path.join(DATA_DIR, "cleaned"))
 RESULTS_DIR = os.path.join(BASE_DIR, "Results")
 PLOTS_DIR = os.path.join(BASE_DIR, "Plots")
 SHAP_DIR = os.path.join(RESULTS_DIR, "shap")
@@ -95,6 +97,27 @@ FEATURE_META = {
     "volatility_20":   ("Volatility", "20-day rolling std of returns"),
     "high_low_range":  ("Other",   "Daily price range (High - Low)"),
     "close_open_change": ("Other", "Intraday price change (Close - Open)"),
+
+    # Market context (^GSPC / ^VIX).  Identical across stocks on a given date.
+    "mkt_ret_1":       ("Market",  "S&P 500 daily return"),
+    "mkt_ret_5":       ("Market",  "S&P 500 5-day return"),
+    "mkt_ret_20":      ("Market",  "S&P 500 20-day return"),
+    "mkt_vol_20":      ("Market",  "S&P 500 20-day realised volatility"),
+    "mkt_vol_60":      ("Market",  "S&P 500 60-day realised volatility"),
+    "mkt_above_sma50": ("Market",  "1 if S&P 500 close is above its 50-day SMA"),
+    "mkt_drawdown_60": ("Market",  "S&P 500 drawdown from its 60-day rolling maximum"),
+    "vix_level":       ("Volatility", "VIX close level"),
+    "vix_log":         ("Volatility", "Log VIX close"),
+    "vix_chg_1":       ("Volatility", "VIX 1-day percentage change"),
+    "vix_chg_5":       ("Volatility", "VIX 5-day percentage change"),
+    "vix_z_20":        ("Volatility", "VIX z-score vs its 20-day mean/std"),
+    "vix_high":        ("Volatility", "1 if VIX >= 20"),
+    "vix_stress":      ("Volatility", "1 if VIX >= 30"),
+    "excess_ret_1":    ("Market",  "Stock 1-day return minus S&P 500 1-day return"),
+    "excess_ret_5":    ("Market",  "Stock 5-day return minus S&P 500 5-day return"),
+    "excess_ret_20":   ("Market",  "Stock 20-day return minus S&P 500 20-day return"),
+    "beta_60":         ("Market",  "60-day rolling beta vs S&P 500"),
+    "corr_60":         ("Market",  "60-day rolling correlation with S&P 500"),
 }
 
 

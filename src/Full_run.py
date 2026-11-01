@@ -1,13 +1,35 @@
 """Full-scale leakage-free walk-forward on all 28 stocks (HORIZON=1).
 
 Refreshes the headline validation numbers on the extended 2018-2026 data:
-  Results/full28_wf_metrics.csv       per-stock, per-model acc/auc/mcc
-  Results/full28_wf_pooled.csv        pooled acc/auc/mcc + McNemar pairs
+  Results/full28_wf_metrics_{TAG}.csv       per-stock, per-model acc/auc/mcc
+  Results/full28_wf_pooled_{TAG}.csv        pooled acc/auc/mcc + McNemar pairs
+  Results/full28_wf_predictions_{TAG}.csv   per stock-date OOS probabilities
 
 Protocol identical to Significance_test.py: step=20, min_train=0.6, three
 seeds averaged on probabilities, per-fold StandardScaler, train rows strictly
-before i-HORIZON. Checkpointed per stock (Results/full28_wf_partial.csv)."""
+before i-HORIZON. Checkpointed per stock from the predictions file.
 
+Usage (baseline vs market):
+    $env:THESIS_DATA_DIR="...\\Data\\cleaned";     $env:THESIS_RUN_TAG="baseline"
+    .venv\\Scripts\\python.exe src\\Full_run.py
+
+    $env:THESIS_DATA_DIR="...\\Data\\cleaned_mkt"; $env:THESIS_RUN_TAG="market"
+    .venv\\Scripts\\python.exe src\\Full_run.py
+
+Or pass CLI flags:
+    python src/Full_run.py --data-dir Data/cleaned_mkt --tag market
+
+Ablations (integration plan §7.4):
+    --feature-set technical          # baseline columns only
+    --feature-set market             # market columns only
+    --market-lag 1                   # robustness: shift market block +1 day
+
+Every tag writes a ``full28_wf_config_{tag}.json`` sidecar; resuming with a
+different configuration under the same tag raises instead of mixing runs.
+"""
+
+import argparse
+import json
 import os
 import warnings
 import numpy as np
@@ -22,20 +44,22 @@ from sklearn.metrics import accuracy_score, roc_auc_score, matthews_corrcoef, ba
 from scipy.stats import binomtest, chi2 as _chi2
 from xgboost import XGBClassifier
 
+from Market_features import MARKET_FEATURE_COLS
+
 BASE_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject"
-DATA_DIR = os.path.join(BASE_DIR, "Data", "cleaned")
+DATA_DIR = os.environ.get("THESIS_DATA_DIR", os.path.join(BASE_DIR, "Data", "cleaned"))
+TAG = os.environ.get("THESIS_RUN_TAG", "baseline")
+# all | technical | market    (ablation C in the integration plan)
+FEATURE_SET = os.environ.get("THESIS_FEATURE_SET", "all")
+# 0 = market features observed at close t (primary), 1 = shifted one day (robustness D)
+MARKET_LAG = int(os.environ.get("THESIS_MARKET_LAG", "0"))
 RESULTS_DIR = os.path.join(BASE_DIR, "Results")
-PARTIAL = os.path.join(RESULTS_DIR, "full28_wf_partial.csv")
 
 RS = 42
 HORIZON = 1
 STEP = 20
 MIN_TRAIN = 0.6
 SEEDS = 3
-
-STOCKS = sorted(
-    f.replace("_cleaned.csv", "") for f in os.listdir(DATA_DIR) if f.endswith("_cleaned.csv")
-)
 
 EXCLUDE = {"Close", "Open", "High", "Low", "Volume",
            "Close_lag1", "Close_lag7", "Close_lag21",
@@ -54,14 +78,33 @@ MODELS = {
                                            random_state=rs, n_jobs=njobs),
 }
 
+MODEL_COLS = {"LR": "p_LR", "RF": "p_RF", "XGB": "p_XGB"}
 
-def load_daily(tk):
-    df = pd.read_csv(os.path.join(DATA_DIR, f"{tk}_cleaned.csv"),
+
+def load_daily(tk, data_dir, feature_set="all", market_lag=0):
+    df = pd.read_csv(os.path.join(data_dir, f"{tk}_cleaned.csv"),
                      index_col="Date", parse_dates=True)
+
+    if market_lag:
+        mkt_present = [c for c in MARKET_FEATURE_COLS if c in df.columns]
+        df[mkt_present] = df[mkt_present].shift(market_lag)
+
     df["target"] = (df["Close"].shift(-HORIZON) > df["Close"]).astype(int)
     df = df.dropna()
     fc = [c for c in df.columns if c not in EXCLUDE and c != "target"]
-    return df[fc].values, df["target"].values
+
+    mkt = set(MARKET_FEATURE_COLS)
+    if feature_set == "technical":
+        fc = [c for c in fc if c not in mkt]
+    elif feature_set == "market":
+        fc = [c for c in fc if c in mkt]
+    elif feature_set != "all":
+        raise ValueError(f"Unknown feature_set: {feature_set}")
+
+    if not fc:
+        raise ValueError(f"{tk}: no features selected for feature_set={feature_set}")
+
+    return df, df[fc].values, df["target"].values
 
 
 def wf_predictions(X, y):
@@ -86,7 +129,7 @@ def wf_predictions(X, y):
                 prob[m][i:i + STEP] = np.nansum([prob[m][i:i + STEP], p / SEEDS], axis=0)
         i += STEP
     valid = ~np.isnan(prob["LR"])
-    return {m: prob[m][valid] for m in MODELS}, y[valid]
+    return {m: prob[m][valid] for m in MODELS}, y[valid], valid
 
 
 def mcnemar(b, c):
@@ -98,71 +141,143 @@ def mcnemar(b, c):
     return p_chi2, p_exact
 
 
-def main():
+def metrics(y, p):
+    pred = p > 0.5
+    return {
+        "Accuracy": round(float(accuracy_score(y, pred)), 4),
+        "BalancedAccuracy": round(float(balanced_accuracy_score(y, pred)), 4),
+        "BaseRate": round(float(np.mean(y)), 4),
+        "AUC": round(float(roc_auc_score(y, p)), 4),
+        "MCC": round(float(matthews_corrcoef(y, pred)), 4),
+    }
+
+
+def main(data_dir=None, tag=None, feature_set=None, market_lag=None):
+    data_dir = data_dir or DATA_DIR
+    tag = tag or TAG
+    feature_set = feature_set or FEATURE_SET
+    market_lag = MARKET_LAG if market_lag is None else market_lag
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    done = set()
-    if os.path.exists(PARTIAL):
-        prev = pd.read_csv(PARTIAL)
-        done = set(prev["Stock"])
-        rows = prev.to_dict("records")
+
+    partial = os.path.join(RESULTS_DIR, f"full28_wf_partial_{tag}.csv")
+    pred_partial = os.path.join(RESULTS_DIR, f"full28_wf_predictions_{tag}.csv")
+
+    # Guard the resume path: reusing a predictions file produced under a
+    # different feature configuration would silently mix runs.
+    config_path = os.path.join(RESULTS_DIR, f"full28_wf_config_{tag}.json")
+    config = {"data_dir": os.path.abspath(data_dir), "tag": tag,
+              "feature_set": feature_set, "market_lag": market_lag,
+              "horizon": HORIZON, "step": STEP, "min_train": MIN_TRAIN,
+              "seeds": SEEDS, "random_state": RS}
+    if os.path.exists(config_path):
+        with open(config_path, encoding="utf-8") as fh:
+            old = json.load(fh)
+        if old != config:
+            raise RuntimeError(
+                f"Tag '{tag}' already has a different configuration:\n"
+                f"  existing: {old}\n  requested: {config}\n"
+                "Use a new --tag or delete the existing "
+                f"full28_wf_*_{tag}.csv files."
+            )
     else:
-        rows = []
+        with open(config_path, "w", encoding="utf-8") as fh:
+            json.dump(config, fh, indent=2)
 
-    pooled = {m: {"y": [], "p": []} for m in MODELS}
-    completed_stocks = set()
-    for tk in STOCKS:
+    stocks = sorted(
+        f.replace("_cleaned.csv", "") for f in os.listdir(data_dir)
+        if f.endswith("_cleaned.csv")
+    )
+
+    print("=" * 60)
+    print(f"DATA_DIR : {data_dir}")
+    print(f"TAG      : {tag}")
+    print(f"FEATURES : {feature_set} (market_lag={market_lag})")
+    print(f"STOCKS   : {len(stocks)}")
+    print("=" * 60)
+
+    if os.path.exists(pred_partial):
+        pred_df = pd.read_csv(pred_partial)
+        pred_df["Date"] = pd.to_datetime(pred_df["Date"], errors="coerce")
+        done = set(pred_df["Stock"].astype(str))
+        print(f"Resuming from {pred_partial} ({len(done)} stocks done)\n")
+    else:
+        pred_df = pd.DataFrame()
+        done = set()
+
+    completed = set(done)
+    for tk in stocks:
         if tk in done:
-            completed_stocks.add(tk)
             continue
-        X, y = load_daily(tk)
-        probs, yv = wf_predictions(X, y)
-        for m in MODELS:
-            pooled[m]["y"].append(yv)
-            pooled[m]["p"].append(probs[m])
-            acc = accuracy_score(yv, probs[m] > 0.5)
-            auc = roc_auc_score(yv, probs[m])
-            mcc = matthews_corrcoef(yv, probs[m] > 0.5)
-            rows.append({"Stock": tk, "Model": m, "n": int(len(yv)),
-                         "Accuracy": round(float(acc), 4),
-                         "BalancedAccuracy": round(float(balanced_accuracy_score(yv, probs[m] > 0.5)), 4),
-                         "BaseRate": round(float(yv.mean()), 4),
-                         "AUC": round(float(auc), 4),
-                         "MCC": round(float(mcc), 4)})
-        pd.DataFrame(rows).to_csv(PARTIAL, index=False)
-        completed_stocks.add(tk)
-        print(f"[{len(completed_stocks)}/28] {tk} (n={len(yv)}) done", flush=True)
+        df, X, y = load_daily(tk, data_dir, feature_set=feature_set,
+                              market_lag=market_lag)
+        probs, yv, valid = wf_predictions(X, y)
+        dates = df.index[valid]
 
-    # pooled metrics + McNemar
+        block = pd.DataFrame({
+            "Stock": tk,
+            "Date": dates,
+            "y": yv.astype(int),
+            "p_LR": probs["LR"],
+            "p_RF": probs["RF"],
+            "p_XGB": probs["XGB"],
+        })
+        pred_df = pd.concat([pred_df, block], ignore_index=True)
+        pred_df.to_csv(pred_partial, index=False)
+
+        completed.add(tk)
+        print(f"[{len(completed)}/{len(stocks)}] {tk} (n={len(yv)}) done", flush=True)
+
+    # Per-stock metrics
+    rows = []
+    for tk, g in pred_df.groupby("Stock", sort=False):
+        yv = g["y"].values
+        for m, col in MODEL_COLS.items():
+            rows.append({"Stock": tk, "Model": m, "n": int(len(yv)),
+                         **metrics(yv, g[col].values)})
+    pd.DataFrame(rows).to_csv(partial, index=False)
+
+    # Pooled metrics + McNemar
+    y_all = pred_df["y"].values
     pool_rows = []
-    for m in MODELS:
-        y = np.concatenate(pooled[m]["y"])
-        p = np.concatenate(pooled[m]["p"])
-        pool_rows.append({"Model": m, "n": int(len(y)),
-                          "Accuracy": round(float(accuracy_score(y, p > 0.5)), 4),
-                          "BalancedAccuracy": round(float(balanced_accuracy_score(y, p > 0.5)), 4),
-                          "BaseRate": round(float(y.mean()), 4),
-                          "AUC": round(float(roc_auc_score(y, p)), 4),
-                          "MCC": round(float(matthews_corrcoef(y, p > 0.5)), 4)})
-    pooled_ok = {m: pd.Series(np.concatenate(pooled[m]["y"])) == pd.Series(np.concatenate(pooled[m]["y"]))}
-    y_all = np.concatenate(pooled["LR"]["y"])
+    for m, col in MODEL_COLS.items():
+        p = pred_df[col].values
+        pool_rows.append({"Model": m, "n": int(len(y_all)), **metrics(y_all, p)})
+
     pairs = [("LR", "RF"), ("LR", "XGB"), ("RF", "XGB")]
     mc = []
     for mA, mB in pairs:
-        pA = (np.concatenate(pooled[mA]["p"]) > 0.5).astype(int)
-        pB = (np.concatenate(pooled[mB]["p"]) > 0.5).astype(int)
+        pA = (pred_df[MODEL_COLS[mA]].values > 0.5).astype(int)
+        pB = (pred_df[MODEL_COLS[mB]].values > 0.5).astype(int)
         b = int(np.sum((pA == y_all) & (pB != y_all)))
         c = int(np.sum((pA != y_all) & (pB == y_all)))
         p_chi2, p_exact = mcnemar(b, c)
         mc.append({"Pair": f"{mA} vs {mB}", "b_A_only": b, "c_B_only": c,
                    "p_chi2": p_chi2, "p_exact": p_exact})
 
-    pd.DataFrame(pool_rows).to_csv(os.path.join(RESULTS_DIR, "full28_wf_pooled.csv"), index=False)
-    pd.DataFrame(mc).to_csv(os.path.join(RESULTS_DIR, "full28_mcnemar_pooled.csv"), index=False)
-    pd.DataFrame(rows).to_csv(PARTIAL, index=False)
-    print(pd.DataFrame(pool_rows).to_string(index=False))
-    print(pd.DataFrame(mc).to_string(index=False))
-    print("Saved pooled + McNemar.")
+    pd.DataFrame(pool_rows).to_csv(os.path.join(RESULTS_DIR, f"full28_wf_pooled_{tag}.csv"), index=False)
+    pd.DataFrame(mc).to_csv(os.path.join(RESULTS_DIR, f"full28_mcnemar_pooled_{tag}.csv"), index=False)
+    pd.DataFrame(rows).to_csv(partial, index=False)
+
+    print("\n" + pd.DataFrame(pool_rows).to_string(index=False))
+    print("\n" + pd.DataFrame(mc).to_string(index=False))
+    print(f"\nSaved: {partial}")
+    print(f"Saved: {pred_partial}")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data-dir", default=DATA_DIR,
+                        help="directory containing {TICKER}_cleaned.csv")
+    parser.add_argument("--tag", default=TAG, help="suffix for result files")
+    parser.add_argument("--feature-set", default=FEATURE_SET,
+                        choices=["all", "technical", "market"],
+                        help="which feature block to train on (ablation C)")
+    parser.add_argument("--market-lag", type=int, default=MARKET_LAG,
+                        help="shift market features by N days (0=primary, 1=robustness D)")
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(data_dir=args.data_dir, tag=args.tag,
+         feature_set=args.feature_set, market_lag=args.market_lag)

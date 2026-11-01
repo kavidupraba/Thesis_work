@@ -4,21 +4,34 @@ Preprocess_data.py
 Purpose:  Cleans and featurizes raw yfinance CSV files for model consumption.
 Pipeline:
   1. Reads raw CSVs from ../Data/ (handles yfinance multi-level headers)
-  2. Flattens column names to single-level (Open, High, Low, Close, Volume)
-  3. Engineers features: technical indicators (RSI, MACD, EMA, ATR, Bollinger, OBV, ROC),
+  2. Optionally merges leakage-safe ^GSPC/^VIX market features
+  3. Flattens column names to single-level (Open, High, Low, Close, Volume)
+  4. Engineers features: technical indicators (RSI, MACD, EMA, ATR, Bollinger, OBV, ROC),
      lags, returns, moving averages, volatility, etc.
-  4. Drops NaN rows introduced by lag windows
-  5. Removes return outliers (>4-sigma)
-  6. Saves cleaned CSVs to ../Data/cleaned/{TICKER}_cleaned.csv
+  5. Drops NaN rows introduced by lag windows
+  6. Removes return outliers (>4-sigma)
+  7. Saves cleaned CSVs to ../Data/cleaned/{TICKER}_cleaned.csv
 Output:   Per-stock cleaned CSV files and a _pipeline_summary.csv
           in ../Data/cleaned/ with a processing log.
+
+Run:
+    python Preprocess_data.py
+    python Preprocess_data.py --with-market --out-dir ../Data/cleaned_mkt
 """
 
+import argparse
 import os
 import glob
 import pandas as pd
 import numpy as np
 import ta
+
+from Market_features import (
+    MARKET_FEATURE_COLS,
+    attach_market_features,
+    build_market_features,
+    load_index_closes,
+)
 
 DATA_DIR = r"C:\Users\Admin\Documents\thesis_sending\PythonProject\Data"
 CLEAN_DIR = os.path.join(DATA_DIR, "cleaned")
@@ -113,14 +126,24 @@ def add_features(df):
     return df
 
 
-def clean_pipeline(filepath):
+def clean_pipeline(filepath, with_market=False, out_dir=None, mkt_feats=None):
     """Run the full cleaning + feature engineering pipeline on a single CSV file."""
 
     ticker = os.path.splitext(os.path.basename(filepath))[0].replace("_stock_data", "")
+    out_dir = out_dir or CLEAN_DIR
+    os.makedirs(out_dir, exist_ok=True)
 
     df = read_yfinance_csv(filepath)
 
     print(f"  {ticker}: {len(df)} rows, columns={list(df.columns)}")
+
+    if with_market:
+        if mkt_feats is None:
+            mkt_feats = build_market_features(load_index_closes())
+        before = len(df)
+        df = attach_market_features(df, mkt_feats)
+        print(f"  {ticker}: merged {len(MARKET_FEATURE_COLS)} market features "
+              f"({before} rows preserved)")
 
     df = add_features(df)
 
@@ -141,24 +164,32 @@ def clean_pipeline(filepath):
 
     df = df.sort_index()
 
-    clean_path = os.path.join(CLEAN_DIR, f"{ticker}_cleaned.csv")
+    clean_path = os.path.join(out_dir, f"{ticker}_cleaned.csv")
     df.to_csv(clean_path)
     print(f"  Saved: {clean_path} ({len(df)} rows)")
 
     return df
 
 
-def process_all():
+def process_all(with_market=False, out_dir=None):
     """Process all *_stock_data.csv files in DATA_DIR through the pipeline and save a summary."""
 
+    out_dir = out_dir or CLEAN_DIR
+    os.makedirs(out_dir, exist_ok=True)
+    mkt_feats = build_market_features(load_index_closes()) if with_market else None
+
     csv_files = sorted(glob.glob(os.path.join(DATA_DIR, "*_stock_data.csv")))
-    print(f"Found {len(csv_files)} CSV files to process\n")
+    print(f"Found {len(csv_files)} CSV files to process "
+          f"({'with' if with_market else 'without'} market features)\n")
+    if with_market:
+        print(f"Market features: {', '.join(MARKET_FEATURE_COLS)}\n")
 
     summary = []
     for fp in csv_files:
         ticker = os.path.splitext(os.path.basename(fp))[0].replace("_stock_data", "")
         try:
-            df = clean_pipeline(fp)
+            df = clean_pipeline(fp, with_market=with_market, out_dir=out_dir,
+                                mkt_feats=mkt_feats)
             summary.append({
                 "ticker": ticker,
                 "rows": len(df),
@@ -171,7 +202,7 @@ def process_all():
             summary.append({"ticker": ticker, "error": str(e)})
 
     summary_df = pd.DataFrame(summary)
-    summary_path = os.path.join(CLEAN_DIR, "_pipeline_summary.csv")
+    summary_path = os.path.join(out_dir, "_pipeline_summary.csv")
     summary_df.to_csv(summary_path, index=False)
     print(f"\nSummary saved to {summary_path}")
     print(summary_df.to_string(index=False))
@@ -179,5 +210,15 @@ def process_all():
     return summary_df
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--with-market", action="store_true",
+                        help="merge ^GSPC/^VIX market features from Data/index/")
+    parser.add_argument("--out-dir", default=None,
+                        help="output directory (default: Data/cleaned)")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    process_all()
+    args = parse_args()
+    process_all(with_market=args.with_market, out_dir=args.out_dir)
