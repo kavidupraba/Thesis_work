@@ -32,6 +32,17 @@ Evaluation (headline)
 - Leakage audit for market features (src/Test_market_features.py, exit 0): truncated rebuilds, AST look-ahead scan, coverage, leaky shift(-1) control; fixed stale-VIX holiday row (2026-05-25) so holidays cannot create phantom rows or forward-filled returns
 - Significance (McNemar), SHAP global/local, cross-model/cross-stock/regime stability, actionability mapping (no edge), LLM explanations, Flask UI with horizontal SHAP bar chart
 
+Evaluation (Phase 1: honest benchmark, proper scoring, power)
+- Always-UP benchmark = 53.19% on the same 22,520 stock-days; every model is significantly worse: baseline -2.91/-2.95/-3.12 pp, technical+market -2.57/-2.88/-2.68 pp, market-only -1.94/-2.06/-2.23 pp (all date-block 95% CIs exclude 0)
+- Full_run.py now saves p_prior (expanding-window training up-share of the fold predicting each row, strictly out of sample) and fold; reruns reproduce the old probabilities exactly (RF differs only at 4e-16 from parallel summation)
+- Proper scores vs p_prior: Brier skill is negative for every run/model (baseline -0.018/-0.036/-0.094; market-only -0.011/-0.016/-0.056; market -0.032/-0.024/-0.086) with CIs excluding 0; log-loss skill likewise -> models are worse than the base-rate forecast, not just worse than 50%
+- Calibration slope of y ~ logit(p) ~ 0 (baseline -0.03/+0.03/+0.01; market-only +0.05/+0.11/+0.07, CIs mostly straddle 0) -> almost no ordering information
+- But the market block is not empty: market_only improves Brier by 0.0018/0.0051/0.0093 and log-loss by 0.0040/0.0111/0.0232 vs baseline (all CIs exclude 0) while accuracy still stays 1.9-2.2 pp below always-up -> some probability information, far too little to beat the drift
+- Power: accuracy-delta bootstrap SE 0.33-0.36 pp (market vs baseline) and 0.49-0.53 pp (market_only vs baseline); at 80% power 1.0 pp needs ~850-1,700 dates, 0.5 pp ~3,200-6,800, 0.3 pp ~8,900-19,000; OOS has 831
+- Index-level test (src/Market_signal_test.py): HAC IC with next-day S&P return for drawdown -0.092 (t=-2.58), vol60 +0.075 (t=+2.36), vix_high +0.113 (t=+2.03), nothing else |t|>2; multivariate HAC logit p=0.52 (max |t|=1.66); index-level WF predicts UP 98% of days, 55.49% vs 56.34% always-up, BSS -0.005; event study shows no monotone drawdown/VIX gradient (1/18 CIs excludes 0)
+- Ceiling arithmetic: mean corr(stock, mkt) = 0.386 (max 0.609) -> implied stock corr 0.029-0.069 -> at the 53.2% up-rate the best possible accuracy is only +0.01 to +0.32 pp over always-up; the measured +0.97 pp for market_only exceeds this ceiling, so treat it as noise (balanced-label arcsin(r)/pi would give ~1-2 pp, which is why 1 pp intuitions mislead)
+- Decision gate: BSS<=0 for all, no joint index signal, no event-study gradient -> market-features thread closed; Phase-2 options (regime-covering OOS, relative-to-SPX target) documented only
+
 Diagnostics (new)
 - Learning curves (train/test logloss across training sizes) for all 28 stocks + 3 models (Plots/train_test_loss_all/tl_{TK}.png, CSV)
 - Bias-variance vs complexity for all 28 stocks (Plots/bias_variance_all/bv_{TK}.png, CSV) — bias flat ~base rate, variance small; no bias drop with increasing capacity (high-bias/low-signal)
@@ -50,3 +61,4 @@ Market-context reproduction
 - python src/Compare_runs.py --baseline baseline --market market
 - python src/Compare_runs.py --baseline baseline --market market_only
 - python src/Compare_runs.py --baseline market --market market_lag1
+- python src/Market_signal_test.py

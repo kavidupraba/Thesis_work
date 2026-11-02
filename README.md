@@ -12,7 +12,10 @@ chance level under a strictly leakage-free walk-forward protocol
 extension that adds daily relative rank and z-score features and scores the
 daily Rank-IC reproduces the same null result, and adding leakage-safe S&P 500
 and VIX market-context features moves balanced accuracy by less than one
-percentage point. The project is therefore a
+percentage point. Scored against the 53.2% always-UP rule instead of 50%, every
+model is 2–3 pp worse and has negative Brier/log-loss skill relative to the
+expanding-window base rate, so the null is stronger than "chance level": the
+models do not beat the drift. The project is therefore a
 careful demonstration of how to test and falsify a momentum-style technical
 signal: it traces an apparent 20-day "signal" to a walk-forward leak, corrects
 it, and shows that no out-of-sample edge survives. This is consistent with the
@@ -48,7 +51,8 @@ README.md
 | Modelling | `LogisticRegression_model.py`, `RandomForest_model.py`, `XGBoost_model.py` | Baseline classifiers, per-stock train/evaluate |
 | Modelling | `main.py` | Orchestrates preprocess -> train -> summary CSV (10-stock pilot) |
 | Validation | `Full_run.py` | **Headline numbers**: leakage-free walk-forward on all 28 stocks, pooled metrics incl. balanced accuracy and base rate; `--tag`, `--feature-set`, `--market-lag` |
-| Validation | `Compare_runs.py` | Paired A/B comparison of two runs: deltas with date-block bootstrap CI and stock-date McNemar |
+| Validation | `Compare_runs.py` | Paired A/B comparison of two runs: deltas with date-block bootstrap CI and stock-date McNemar, plus naive benchmarks (always-up, prior threshold), Brier/log-loss skill vs the expanding-window prior, calibration and a power/MDE block |
+| Validation | `Market_signal_test.py` | Index-level test of the ^GSPC/^VIX block: HAC ICs, event study, index-level walk-forward, ceiling arithmetic and the decision gate |
 | Validation | `Significance_test.py` | McNemar pairwise significance (10-stock pilot) |
 | Validation | `Evaluate_20d.py` | 3/5/20-day horizon sensitivity, walk-forward ensembles |
 | Validation | `Cross_sectional_experiment.py` | Relative rank/z features + daily Rank-IC with permutation control (negative result) |
@@ -183,6 +187,71 @@ of balanced accuracy under a protocol where the base rate alone is 53.2%. It
 does not overturn the null result, and the technical block dilutes rather than
 complements the market signal.
 
+### Benchmarks, proper scoring and power (Phase 1)
+
+Comparing a model with 50% (rather than with the drift) flatters it. The
+always-predict-UP rule scores **53.19%** on the same 22,520 stock-days, and every
+model is significantly *worse* than that rule:
+
+| Run | Model | Accuracy | Δ vs always-up (95% CI) |
+| --- | --- | --- | --- |
+| baseline | LR / RF / XGB | 50.28 / 50.24 / 50.07% | −2.91 / −2.95 / −3.12 pp (all CIs exclude 0) |
+| market | LR / RF / XGB | 50.62 / 50.32 / 50.51% | −2.57 / −2.88 / −2.68 pp |
+| market_only | LR / RF / XGB | 51.25 / 51.13 / 50.96% | −1.94 / −2.06 / −2.23 pp |
+
+`Full_run.py` now records `p_prior`, the expanding-window training up-share for
+the fold predicting each row (strictly out of sample). Scored against that
+forecast instead of 50%, no model has any skill: the Brier skill score is
+negative for every run and model (baseline −0.018 / −0.036 / −0.094,
+market_only −0.011 / −0.016 / −0.056) and the 95% date-block CIs exclude zero
+everywhere; log-loss skill is negative in the same pattern. The calibration
+slope of `y ~ logit(p)` is ≈0 for every model (baseline −0.03 / +0.03 / +0.01,
+market_only +0.05 / +0.11 / +0.07, CIs mostly straddling 0), i.e. the
+probabilities carry almost no ordering information.
+
+The market block is not literally empty: **market_only** improves proper scores
+relative to the technical baseline — Brier −0.0018 / −0.0051 / −0.0093 and
+log-loss −0.0040 / −0.0111 / −0.0232 for LR / RF / XGB, every CI excluding zero
+— while its accuracy gain (+0.97 / +0.89 / +0.89 pp) is not significant
+(McNemar exact p = 0.045 / 0.097 / 0.104; bootstrap CI −0.03 to +1.90 pp for
+LR). So the features carry a *little* probability information; it is simply far
+too small to move the decision rule above the drift.
+
+**Why the gain is < 1 pp.** At the index level the signal itself is weak.
+Spearman IC with the next-day S&P return, Newey–West t-stats, 2023–2026:
+`mkt_drawdown_60` −0.092 (t = −2.58), `mkt_vol_60` +0.075 (t = +2.36),
+`vix_high` +0.113 (t = +2.03); nothing else has |t| > 2. The multivariate HAC
+logit has no joint signal (p = 0.52, max |t| = 1.66), an index-level
+walk-forward model on the same protocol predicts UP on 98% of days and scores
+55.49% vs 56.34% for always-up (BSS −0.005), and no drawdown quintile or VIX
+bin shows a monotone next-day return gradient (1 of 18 bootstrap CIs excludes
+zero, as expected by chance).
+
+The ceiling arithmetic then explains the arithmetic of "not even 1%". Mean
+same-day correlation between the 28 stocks and the market is 0.386 (max 0.609),
+so an index IC of 0.075–0.113 implies a stock-level correlation of only
+0.029–0.069. At the observed 53.2% up-rate the accuracy-maximising rule is
+almost always "up", so that correlation buys **+0.01 to +0.32 pp** of accuracy
+over always-up — and market_only's measured +0.97 pp is above that implied
+ceiling, which is another reason to read it as noise. (At a balanced 50%
+up-rate the same correlation would be worth ~1–2 pp, which is why "1 pp"
+intuitions are misleading here.)
+
+**Power.** The date-block bootstrap SE of the accuracy delta is 0.33–0.36 pp for
+market vs baseline and 0.49–0.53 pp for market_only vs baseline (95% CI
+half-width ≈0.7–1.0 pp). At 80% power, 1.0 pp needs ~850–1,700 independent
+dates, 0.5 pp ~3,200–6,800, and 0.3 pp ~8,900–19,000; the OOS window has 831.
+The study is therefore powered to detect ~1 pp, not the sub-pp effect the
+features could plausibly have, which is exactly why the ceiling arithmetic
+matters more than the p-values here.
+
+**Decision gate.** Brier skill ≤ 0 for all models, no joint index-level HAC
+signal, and no event-study gradient, so the market-features thread is closed:
+the result is reported as a clean negative with the ceiling and power
+calculations rather than as a marginal p-value. Regime-covering OOS (so
+2020/2022 are tested) and a market-neutral relative-to-SPX target are documented
+as the only Phase-2 options if the question is reopened.
+
 **Reproduce.**
 
 ```bash
@@ -196,6 +265,7 @@ python src/Full_run.py --data-dir Data/cleaned_mkt --tag market_lag1 --market-la
 python src/Compare_runs.py --baseline baseline --market market
 python src/Compare_runs.py --baseline baseline --market market_only
 python src/Compare_runs.py --baseline market --market market_lag1
+python src/Market_signal_test.py
 ```
 
 ## Diagnostics

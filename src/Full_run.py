@@ -4,6 +4,8 @@ Refreshes the headline validation numbers on the extended 2018-2026 data:
   Results/full28_wf_metrics_{TAG}.csv       per-stock, per-model acc/auc/mcc
   Results/full28_wf_pooled_{TAG}.csv        pooled acc/auc/mcc + McNemar pairs
   Results/full28_wf_predictions_{TAG}.csv   per stock-date OOS probabilities
+                                             (+ p_prior: expanding-window train
+                                             up-share, fold: fold index)
 
 Protocol identical to Significance_test.py: step=20, min_train=0.6, three
 seeds averaged on probabilities, per-fold StandardScaler, train rows strictly
@@ -111,7 +113,13 @@ def wf_predictions(X, y):
     n = len(y)
     start = int(n * MIN_TRAIN)
     prob = {m: np.full(n, np.nan) for m in MODELS}
+    # Expanding-window up-share for the fold that predicts each row. It uses only
+    # y[:tr_end], i.e. nothing at or after the test window, so it is a strictly
+    # out-of-sample base-rate forecast and the reference for Brier/log-loss skill.
+    prior = np.full(n, np.nan)
+    fold = np.full(n, -1, dtype=int)
     i = start
+    k = 0
     while i + STEP <= n:
         tr_end = i - HORIZON
         sc = StandardScaler().fit(X[:tr_end])
@@ -127,9 +135,13 @@ def wf_predictions(X, y):
                     model.fit(X[:tr_end], y[:tr_end])
                     p = model.predict_proba(Xte)[:, 1]
                 prob[m][i:i + STEP] = np.nansum([prob[m][i:i + STEP], p / SEEDS], axis=0)
+        prior[i:i + STEP] = float(np.mean(y[:tr_end]))
+        fold[i:i + STEP] = k
         i += STEP
+        k += 1
     valid = ~np.isnan(prob["LR"])
-    return {m: prob[m][valid] for m in MODELS}, y[valid], valid
+    return ({m: prob[m][valid] for m in MODELS}, y[valid], valid,
+            prior[valid], fold[valid])
 
 
 def mcnemar(b, c):
@@ -198,6 +210,11 @@ def main(data_dir=None, tag=None, feature_set=None, market_lag=None):
     if os.path.exists(pred_partial):
         pred_df = pd.read_csv(pred_partial)
         pred_df["Date"] = pd.to_datetime(pred_df["Date"], errors="coerce")
+        if "p_prior" not in pred_df.columns or "fold" not in pred_df.columns:
+            raise RuntimeError(
+                f"{pred_partial} was written before p_prior/fold existed. "
+                "Back it up and delete it to force a clean rerun."
+            )
         done = set(pred_df["Stock"].astype(str))
         print(f"Resuming from {pred_partial} ({len(done)} stocks done)\n")
     else:
@@ -210,7 +227,7 @@ def main(data_dir=None, tag=None, feature_set=None, market_lag=None):
             continue
         df, X, y = load_daily(tk, data_dir, feature_set=feature_set,
                               market_lag=market_lag)
-        probs, yv, valid = wf_predictions(X, y)
+        probs, yv, valid, prior, fold = wf_predictions(X, y)
         dates = df.index[valid]
 
         block = pd.DataFrame({
@@ -220,6 +237,8 @@ def main(data_dir=None, tag=None, feature_set=None, market_lag=None):
             "p_LR": probs["LR"],
             "p_RF": probs["RF"],
             "p_XGB": probs["XGB"],
+            "p_prior": prior,
+            "fold": fold.astype(int),
         })
         pred_df = pd.concat([pred_df, block], ignore_index=True)
         pred_df.to_csv(pred_partial, index=False)
