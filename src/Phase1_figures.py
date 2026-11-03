@@ -4,17 +4,21 @@ Regenerate every figure used by ``FINDINGS_PHASE1.md`` from the saved Phase-1
 CSVs.  Read-only w.r.t. ``Data/`` and ``Results/``; writes PNGs to
 ``Plots/phase1/``.
 
+The exact output names are listed in the figure index at the top of
+``FINDINGS_PHASE1.md``.  ``Plots/`` is gitignored, so the PNGs are never
+committed; this script is the single source of truth for where each one lands.
+
 Figures
 -------
-fig1  accuracy vs the always-UP benchmark (3 runs x 3 models, CIs)
-fig2  Brier / log-loss skill against the expanding-window prior (9 pairs)
-fig3  reliability (calibration) curves for baseline vs market_only
-fig4  market_only - baseline deltas: accuracy, Brier, log-loss
-fig5  index-level ICs with HAC intervals, OOS and per window
-fig6  event study: drawdown quintiles and VIX bins, next-day S&P return
-fig7  every model's accuracy vs the drift, and the implied information ceiling
-fig8  power: OOS dates needed to detect a given accuracy effect
-fig9  why the benchmark is 53%: prior drift and label noise
+fig1_accuracy_vs_always_up.png    accuracy vs the always-UP benchmark (CIs)
+fig2_skill_vs_prior.png           Brier / log-loss skill vs the prior (9 pairs)
+fig3_calibration.png              reliability curves, baseline vs market_only
+fig4_market_only_deltas.png       market_only - baseline: accuracy, Brier, log-loss
+fig5_index_ic.png                 index-level ICs with HAC intervals, by window
+fig6_event_study.png              drawdown quintiles and VIX bins, next-day S&P
+fig7_ceiling.png                  model accuracy vs the drift and the ceiling
+fig8_power.png                    dates needed to detect a given accuracy effect
+fig9_base_rate_and_labels.png     prior drift and label noise
 
 Usage
 -----
@@ -69,7 +73,7 @@ def save(fig, name: str) -> None:
     path = os.path.join(OUT, name)
     fig.savefig(path, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    print(f"  wrote {path}")
+    print(f"  wrote {os.path.relpath(path, BASE_DIR)}")
 
 
 def load_scoring() -> pd.DataFrame:
@@ -468,7 +472,7 @@ def fig9_base_rate_and_labels() -> None:
 
 def main() -> None:
     os.makedirs(OUT, exist_ok=True)
-    print("Phase 1 figures ->", OUT)
+    print("Phase 1 figures ->", os.path.relpath(OUT, BASE_DIR))
     sc = load_scoring()
     fig1_accuracy(sc)
     fig2_skill(sc)

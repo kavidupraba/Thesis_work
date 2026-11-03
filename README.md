@@ -133,6 +133,9 @@ factor libraries consider daily IC tradeable.
 > **Full write-up:** [`FINDINGS_PHASE1.md`](FINDINGS_PHASE1.md) — every claim tied
 > to the figure that proves it, all technical terms defined, and a defence
 > playbook for the likely examiner questions. This section is the short version.
+> Its figure index lists the exact `Plots/phase1/` path and a paste-ready caption
+> for each of the nine figures (the folder is gitignored; regenerate with
+> `python src/Phase1_figures.py`).
 
 The 23 technical indicators are stock-local, so the headline experiment cannot
 say whether a market-wide risk state carries next-day direction information.

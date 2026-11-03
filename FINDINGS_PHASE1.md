@@ -44,6 +44,35 @@ over the drift.**
 
 ---
 
+## Figure index — where each plot is written
+
+`src/Phase1_figures.py` is the only script that produces Phase-1 figures. Running
+`python src/Phase1_figures.py` writes exactly these nine PNGs into
+`Plots/phase1/`, relative to the repository root. `Plots/` is gitignored by
+design — no plot is committed — so this table is the canonical map from a finding
+to the file you cite in the thesis.
+
+| Fig | Path (relative to repo root) | Proves | Built from | Caption for the thesis |
+| --- | --- | --- | --- | --- |
+| 1 | `Plots/phase1/fig1_accuracy_vs_always_up.png` | F1 | `Results/compare_*_scoring.csv` | Pooled out-of-sample accuracy of the three feature sets and three models versus the 53.19% always-UP benchmark; bars are 95% date-block bootstrap CIs. |
+| 2 | `Plots/phase1/fig2_skill_vs_prior.png` | F2 | `Results/compare_*_scoring.csv` | Brier and log-loss skill against the expanding-window base-rate forecast; all nine run–model pairs are negative and every 95% CI excludes zero. |
+| 3 | `Plots/phase1/fig3_calibration.png` | F3 | `Results/compare_baseline_vs_market_only_calibration.csv`, `..._scoring.csv` | Reliability curves by decile of predicted probability for the technical baseline and the market-only model; the near-flat curves and slopes far below 1 show that the probabilities barely order outcomes. |
+| 4 | `Plots/phase1/fig4_market_only_deltas.png` | F4 | `Results/compare_baseline_vs_market_only_deltas.csv` | market_only minus technical baseline on identical stock-days: accuracy, Brier and log-loss deltas with 95% date-block CIs. The probability scores improve; the accuracy gain's CI includes zero. |
+| 5 | `Plots/phase1/fig5_index_ic.png` | F5 | `Results/market_signal_ic.csv` | Spearman information coefficients with the next-day S&P 500 return in 2023–2026 (left) and across evaluation windows (right); only 3 of 14 features reach \|t\| > 2, and the magnitude collapses in 2021–2022. |
+| 6 | `Plots/phase1/fig6_event_study.png` | F5 | `Results/market_signal_event_study.csv` | Mean next-day S&P 500 return by 60-day drawdown quintile and VIX regime in 2023–2026; there is no monotone gradient, and none of the nine out-of-sample bootstrap CIs excludes zero. |
+| 7 | `Plots/phase1/fig7_ceiling.png` | F6 | `Results/market_signal_ceiling.csv`, `Results/compare_*_scoring.csv` | Accuracy minus the 53.19% drift for all nine models against the range implied by the measured index IC; every model is 1.9–3.1 pp below the drift, while perfect use of the signal is at most 0.3 pp above it. |
+| 8 | `Plots/phase1/fig8_power.png` | F7 | SEs from `Results/compare_*_deltas.csv` | Independent dates needed to detect an accuracy effect at 80% power, using the observed date-block bootstrap standard errors; 831 dates resolve ~1 pp, not the sub-pp effects at issue. |
+| 9 | `Plots/phase1/fig9_base_rate_and_labels.png` | F3, F8 | `Results/full28_wf_predictions_baseline.csv`, `Data/cleaned/` | Left: the expanding-window prior per fold and its cross-stock range against the pooled 53.19% up-rate. Right: absolute next-day returns on the same stock-days, 30.5% of them below 0.5%. |
+
+Paths are relative to the repository root
+(`C:\Users\Admin\Documents\thesis_sending\PythonProject`). If a file is missing,
+it has not been generated yet: run `python src/Phase1_figures.py`, which prints
+each path as it writes it. The script reads only `Results/` and `Data/cleaned/`,
+so the figures can be rebuilt without rerunning the models, and it never touches
+the data directories.
+
+---
+
 ## 1. What was measured, and why 50% is the wrong yardstick
 
 **Target.** For each stock and date *t*, the label is 1 if
@@ -799,21 +828,12 @@ python src/Market_signal_test.py
 python src/Phase1_figures.py
 ```
 
-| Figure | File | Underlying data |
-| --- | --- | --- |
-| 1 | `Plots/phase1/fig1_accuracy_vs_always_up.png` | `compare_*_scoring.csv` |
-| 2 | `Plots/phase1/fig2_skill_vs_prior.png` | `compare_*_scoring.csv` |
-| 3 | `Plots/phase1/fig3_calibration.png` | `compare_*_calibration.csv` |
-| 4 | `Plots/phase1/fig4_market_only_deltas.png` | `compare_baseline_vs_market_only_deltas.csv` |
-| 5 | `Plots/phase1/fig5_index_ic.png` | `market_signal_ic.csv` |
-| 6 | `Plots/phase1/fig6_event_study.png` | `market_signal_event_study.csv` |
-| 7 | `Plots/phase1/fig7_ceiling.png` | `market_signal_ceiling.csv`, `compare_*_scoring.csv` |
-| 8 | `Plots/phase1/fig8_power.png` | SEs from `..._deltas.csv` |
-| 9 | `Plots/phase1/fig9_base_rate_and_labels.png` | `full28_wf_predictions_baseline.csv`, `Data/cleaned` |
-
+Every figure, its exact output path, the claim it supports and the CSV it is
+built from are listed in the **figure index** near the top of this document.
 `Plots/` is gitignored in this repository, as it is for every other plot in the
-project; the nine figures regenerate from the CSVs with one command, so the
-numbers do not depend on the images being committed.
+project; the nine figures regenerate from the CSVs with one command
+(`python src/Phase1_figures.py`), so the numbers do not depend on the images
+being committed.
 
 Verification already performed and recorded: the three main runs reproduce the
 previous probabilities (LR/XGB bit-identical, RF max difference 4×10⁻¹⁶), pooled
