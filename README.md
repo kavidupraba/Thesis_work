@@ -34,6 +34,7 @@ Results/               Metrics, SHAP arrays, caches, LLM log (gitignored)
 Plots/                 Generated figures (gitignored)
 static/                UI stylesheet + precomputed waterfall PNGs
 templates/             Legacy Jinja templates (the served UI is generated in app.py)
+FINDINGS_PHASE1.md     Full Phase-1 write-up: findings, proof figures, glossary, defence playbook
 README.md
 ```
 
@@ -53,6 +54,7 @@ README.md
 | Validation | `Full_run.py` | **Headline numbers**: leakage-free walk-forward on all 28 stocks, pooled metrics incl. balanced accuracy and base rate; `--tag`, `--feature-set`, `--market-lag` |
 | Validation | `Compare_runs.py` | Paired A/B comparison of two runs: deltas with date-block bootstrap CI and stock-date McNemar, plus naive benchmarks (always-up, prior threshold), Brier/log-loss skill vs the expanding-window prior, calibration and a power/MDE block |
 | Validation | `Market_signal_test.py` | Index-level test of the ^GSPC/^VIX block: HAC ICs, event study, index-level walk-forward, ceiling arithmetic and the decision gate |
+| Figures | `Phase1_figures.py` | Regenerates all nine Phase-1 proof figures from the saved `Results/` CSVs into `Plots/phase1/` |
 | Validation | `Significance_test.py` | McNemar pairwise significance (10-stock pilot) |
 | Validation | `Evaluate_20d.py` | 3/5/20-day horizon sensitivity, walk-forward ensembles |
 | Validation | `Cross_sectional_experiment.py` | Relative rank/z features + daily Rank-IC with permutation control (negative result) |
@@ -127,6 +129,10 @@ the band of pure chance and far below the ~0.02 threshold at which published
 factor libraries consider daily IC tradeable.
 
 ## Market-context experiment (^GSPC / ^VIX)
+
+> **Full write-up:** [`FINDINGS_PHASE1.md`](FINDINGS_PHASE1.md) — every claim tied
+> to the figure that proves it, all technical terms defined, and a defence
+> playbook for the likely examiner questions. This section is the short version.
 
 The 23 technical indicators are stock-local, so the headline experiment cannot
 say whether a market-wide risk state carries next-day direction information.
@@ -203,7 +209,7 @@ model is significantly *worse* than that rule:
 the fold predicting each row (strictly out of sample). Scored against that
 forecast instead of 50%, no model has any skill: the Brier skill score is
 negative for every run and model (baseline −0.018 / −0.036 / −0.094,
-market_only −0.011 / −0.016 / −0.056) and the 95% date-block CIs exclude zero
+market_only −0.011 / −0.015 / −0.056) and the 95% date-block CIs exclude zero
 everywhere; log-loss skill is negative in the same pattern. The calibration
 slope of `y ~ logit(p)` is ≈0 for every model (baseline −0.03 / +0.03 / +0.01,
 market_only +0.05 / +0.11 / +0.07, CIs mostly straddling 0), i.e. the
@@ -212,10 +218,12 @@ probabilities carry almost no ordering information.
 The market block is not literally empty: **market_only** improves proper scores
 relative to the technical baseline — Brier −0.0018 / −0.0051 / −0.0093 and
 log-loss −0.0040 / −0.0111 / −0.0232 for LR / RF / XGB, every CI excluding zero
-— while its accuracy gain (+0.97 / +0.89 / +0.89 pp) is not significant
-(McNemar exact p = 0.045 / 0.097 / 0.104; bootstrap CI −0.03 to +1.90 pp for
-LR). So the features carry a *little* probability information; it is simply far
-too small to move the decision rule above the drift.
+— while its accuracy gain (+0.97 / +0.89 / +0.89 pp) is not robust: the
+bootstrap CI includes zero for LR (−0.03 to +1.90 pp), and although LR's McNemar
+exact p = 0.045 is nominally below 0.05, Holm-adjusting the three model tests
+gives 0.134 (RF 0.097, XGB 0.104). So the features carry a *little* probability
+information; it is simply far too small to move the decision rule above the
+drift.
 
 **Why the gain is < 1 pp.** At the index level the signal itself is weak.
 Spearman IC with the next-day S&P return, Newey–West t-stats, 2023–2026:
@@ -232,14 +240,15 @@ same-day correlation between the 28 stocks and the market is 0.386 (max 0.609),
 so an index IC of 0.075–0.113 implies a stock-level correlation of only
 0.029–0.069. At the observed 53.2% up-rate the accuracy-maximising rule is
 almost always "up", so that correlation buys **+0.01 to +0.32 pp** of accuracy
-over always-up — and market_only's measured +0.97 pp is above that implied
-ceiling, which is another reason to read it as noise. (At a balanced 50%
-up-rate the same correlation would be worth ~1–2 pp, which is why "1 pp"
-intuitions are misleading here.)
+over always-up. market_only still sits 1.9–2.2 pp *below* the drift, so its
++0.97 pp gain over the technical baseline merely moves it from −2.9 to −1.9 pp
+versus the drift — a comparison between two weak models, not an edge. (At a
+balanced 50% up-rate the same correlation would be worth ~1–2 pp, which is why
+"1 pp" intuitions are misleading here.)
 
 **Power.** The date-block bootstrap SE of the accuracy delta is 0.33–0.36 pp for
 market vs baseline and 0.49–0.53 pp for market_only vs baseline (95% CI
-half-width ≈0.7–1.0 pp). At 80% power, 1.0 pp needs ~850–1,700 independent
+half-width ≈0.7–1.0 pp). At 80% power, 1.0 pp needs ~800–1,700 independent
 dates, 0.5 pp ~3,200–6,800, and 0.3 pp ~8,900–19,000; the OOS window has 831.
 The study is therefore powered to detect ~1 pp, not the sub-pp effect the
 features could plausibly have, which is exactly why the ceiling arithmetic
